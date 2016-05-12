@@ -275,6 +275,58 @@ var Keys = [
     {key: p521Key, alg:{name:"ECDH", namedCurve:"P-521"}, oid:{oid: ecPublicKey, params:curveP521} }
 ];
 
+
+var testArray[] = [
+  {step:"0", name:"default"},
+  {step:"6", name:"format - raw"},
+  {step:"6", name:"format - pkcs8"},
+  {step:"6", name:"format - spki"},
+  {step:"6", name:"format - jwk"},
+];
+
+var testErrorArray[] = [
+  {step:"G2", name:"Normalize", delete:["algorithms/namedCurve"], error:"UNKNOWN"},
+  {step:"G2", name:"Normalize", set:{"algorithms/namedCurve":5}, error:"UNKNOWN"},
+  {step:"G6a", name:"Format error", conditions:{eq:[format:"raw"]}, function:{name:AsJWKPublic}, error:"TypeError"},
+  {step:"G6a", name:"Format error", conditions:{eq:[format:"pkcs8"]}, function:{name:AsJWKPublic}, error:"TypeError"},
+  {step:"G6a", name:"Format error", conditions:{eq:[format:"spki"]}, function:{name:AsJWKPublic}, error:"TypeError"},
+  {step:"G6b", name:"Format error", conditions:{eq:[format:"jwk"]}, function:{name:AsASN1Public}, error:"TypeError"},
+  {step:"2.1", name:"Empty Usage", conditions:{eq:{format:"spki"}}, set:{usages:["X"]}, error:"SyntaxError"},
+  //  Generate the list of errors we are going to test parsing for
+  //  - Good BER value
+  //  - Decode failure - type
+  //  - Decode failure - length
+  {step:"2.3", name:"Parse SPKI error", conditions:{eq:{format:"spki"}}, function:{name:"AsASN1Public", params:"Errro1"}, error:"DataError"},
+  // If params is not an instance of ECParameters that specifies a namedCurve
+  {step:"2.6", name:"no named curve", conditions:{eq:{format:"spki"}}, error:"DataError"},
+  //  Step 2.10 - Need to look at RFC 5480 section 2.2
+  //  Step 2.10 - Provide an named Curve for future use
+  //  Step 2.10 - Provide a named Curve which is not ever going to be one
+  //  Step 2.11 - Not same named curves
+  {step:"2.11", name:"Mis-matched curve", conditions:{eq:{format:"spki", "algorithm/namedCurve":"P-256"}}, set:{"algorithm/namedCurve":"P-521"}, error:"DataError"},
+  {step:"2.11", name:"Mis-matched curve", conditions:{eq:{format:"spki", "algorithm/namedCurve":"P-256"}}, function:{name:"AsASN1Public", params:{"namedCurve":"P-521"}}, error:"DataError"},
+  {step:"2.11", name:"Mis-matched curve", conditions:{eq:{format:"spki", "algorithm/namedCurve":"P-384"}}, set:{"algorithm/namedCurve":"P-521"}, error:"DataError"},
+  {step:"2.11", name:"Mis-matched curve", conditions:{eq:{format:"spki", "algorithm/namedCurve":"P-384"}}, function:{name:"AsASN1Public", params:{"namedCurve":"P-521"}}, error:"DataError"},
+  {step:"2.11", name:"Mis-matched curve", conditions:{eq:{format:"spki", "algorithm/namedCurve":"P-521"}}, set:{"algorithm/namedCurve":"P-256"}, error:"DataError"},
+  {step:"2.11", name:"Mis-matched curve", conditions:{eq:{format:"spki", "algorithm/namedCurve":"P-521"}}, function:{name:"AsASN1Public", params:{"namedCurve":"P-256"}}, error:"DataError"},
+  
+  //  Step 2.12 - Key is not valid on the curve
+  {step:"2.12", name:"Invalid Point", conditions:{eq:{format:"spki"}}, function:{name:"AsASN1Public", params:{invalidPoint:true}}, error:"DataError"},
+
+  //  Step 2.1 - usages contains an entry which is not "deriveKey" or "deriveBits"
+  {step:"2.1", name:"Invalid Usages", conditions:{eq:{format:"pkcs8"}}, set:{usages:["deriveKey", "depriveKey"]], error:"SyntaxError"},
+
+  //  Step 2.3 - error in parsing  "DataError"
+  
+  //  Step 2.4 - wrong oid
+  {step:"2.4", name:"Wrong privateKeyAlgorithm", conditions:{eq:{format:"pkcs8"}, 
+  
+  
+  
+  {step:"G9", name:"usage empty", conditions:{eq:{keyType:"secret"}}, set:{usages:[]}, error:"SyntaxError"},
+  {step:"G9", name:"usage empty", conditions:{eq:{keyType:"private"}}, set:{usages:[]}, error:"SyntaxError"}},
+];
+
 function run_test()
 {
     var t;

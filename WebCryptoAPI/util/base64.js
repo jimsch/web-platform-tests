@@ -134,8 +134,17 @@
     return x;
   }
 
+    function b64ToByteArrayURL(str) {
+        switch (str.length % 4) {
+        case 0:  return b64ToByteArray(str);
+        case 1:  return b64ToByteArray(str+"===");
+        case 2:  return b64ToByteArray(str+"==");
+        case 3:  return b64ToByteArray(str+"=");
+        }
+    }
 
   exports.toByteArray = b64ToByteArray
     exports.fromByteArray = uint8ToBase64
     exports.fromByteArrayURL = uint8ToBase64URL
+    exports.toByteArrayURL = b64ToByteArrayURL
 }(typeof exports === 'undefined' ? (this.base64js = {}) : exports))
