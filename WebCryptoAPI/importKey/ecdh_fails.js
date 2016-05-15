@@ -43,10 +43,10 @@ function toBase64(data)
 function extend(data)
 {
     var x = base64js.toByteArrayURL(data);
-    var y = new Uint8Array(x.length+1);
-    //  I really want to do a copy, but since it fails this should be ok.
+    vary = asn1_to_uint8([data, new Uint8Array([0])]);
     return toBase64(y);
 }
+    
 
 function shorten(data)
 {
@@ -165,7 +165,10 @@ function build_jwk_private(privateKey)
 
 function build_point(keyData)
 {
-    return asn1_to_uint8([new Uint8Array([0x04]), keyData.x,keyData.y]);
+    if (keyData.useSign) {
+        return asn1_to_uint8([new Uint8Array[0x02 + keyData.sign], keyData.x]);
+    }
+    return asn1_to_uint8([new Uint8Array([0x04]), keyData.x, keyData.y]);
 }
 
 function build_asn_public(keyData, asnAlg, ber)
@@ -199,21 +202,26 @@ function AsASN1Public(call_data, test_params)
             call_data.algorithm = call_data.raw_key.alg;
             break;
 
+            //  ASN.1 is one byte too long
         case "Extend":
             call_data.keyData = extendBinary(call_data.keyData);
             break;
-            
+
+            //  ASN.1 is one byte too short
         case "Shorten":
             call_data.keyData = shortenBinary(call_data.keyData);
             break;
-            
+
+            // ASN.1 uses BER at the top level
         case "BER":
             call_data.keyData = build_asn_public(call_data.raw_key.key, call_data.raw_key.oid, true);
             break;
 
-        case "invalid_point":
+            //  Add one to the x axis
+        case "invalidPoint":
+            call_data.raw_key.key.x[call_data.raw_key.key.x.length-1] += 1;
+            call_data.keyData = build_asn_public(call_data.raw_key.key, call_data.raw_key.oid, false);
             break;
-            
 
         default:
             switch (test_params[i].name) {
@@ -245,20 +253,55 @@ function build_asn_private(keyMap, asnAlg)
     //       }
     //    }
     //  }
+    //
+    //  Good:
+    //    1. Omit params inside
+    //    2. omit public key inside
+    //    3. omit both of them
+    //
+    //  Bad:
+    //    1. external version #
+    //    2. External wrong OID
+    //    3. External curve and internal curve match - mismatch alg parameter
+    //    4. External BER
+    //    5. Internal wrong version #
+    //    6. Internal wrong curve 
+    //    7. Internal curve and external curve different
+    //    8. Internal public key wrong
+    //    9. Internal BER encoding
+    //   10. Internal private key as integer
+    //   
 
-    var x = asn1_encode(0x30, [].concat(
-        asn1_encode_integer([new Uint8Array([1])]),
-        asn1_encode_OctetString([keyMap.d])//,
-//        asnAlg["params"],
-//        asn1_encode_bitstring( build_point(keyMap))
-    ));
-    x = asn1_encode_OctetString([x]);
+    var inner = [];
+    inner.push(asn1_encode_integer([new Uint8Array([1])]));
+    inner.push(asn1_encode_OctetString([keyMap.d]));
+    inner.push(asnAlg["params"]);
+    inner.push(asn1_encode_bitstring( build_point(keyMap)));
 
-    x = asn1_encode(0x30, [].concat(
-        asn1_encode_integer([new Uint8Array([0])]),
-        asn1_encode_Algorithm(asnAlg),
-        x));
-    return asn1_to_uint8([x]);
+    var x = asn1_encode_OctetString(x);
+
+    var topLevel = [];
+
+    if ('OuterVersion' in keyMap) {
+        topLevel.push(asn1_encode_integer([new Uint8Array([keyMap.OuterVersion])]));
+    }
+    else {
+        topLevel.push(asn1_encode_integer([new Uint8Array([0])]));
+    }
+
+    topLevel.push(asn1_encode_Alorithm(asnAlg));
+    topLevel.push(x);
+
+    if (keyMap.OuterBer) {
+        x.unshift(new Uint8Array([0x30, 0x81]));
+        x.push(new Uint8Array([0x0, 0x0]));
+        x = asn1_to_uint8([x]);
+    }
+    else {
+        x = asn1_encode(0x30, topLevel);
+    }
+
+    return x;
 }
 
 function AsASN1Private(call_data, test_params)
@@ -369,13 +412,16 @@ var testErrorArray = [
   //  Step 2.12 - Key is not valid on the curve
     {step:"2.12", name:"Invalid Point", conditions:{eq:{format:"spki"}}, callFunction:{name:AsASN1Public, params:["invalidPoint"]}, error:"DataError"},
 
-  //  Step 2.1 - usages contains an entry which is not "deriveKey" or "deriveBits"
+    //  "PKCS8"
+    //  Step 2.1 - usages contains an entry which is not "deriveKey" or "deriveBits"
     {step:"2.1", name:"Invalid Usages", conditions:{eq:{format:"pkcs8"}}, set:{usages:["deriveKey", "depriveKey"]}, error:"SyntaxError"},
 
-  //  Step 2.3 - error in parsing  "DataError"
+    //  Step 2.3 - error in parsing  "DataError"
   
-  //  Step 2.4 - wrong oid
-    {step:"2.4", name:"Wrong privateKeyAlgorithm", conditions:{eq:{format:"pkcs8"}}}, 
+    //  Step 2.4 - wrong oid
+    {step:"2.4", name:"Wrong privateKeyAlgorithm", conditions:{eq:{format:"pkcs8"}}, callFunction:{name:AsASN1Private, params:["wrong privateKeyAlg"]}, error:"DataError"},
+
+    
 
     //  "jwk"
     // Step 2.2 - error while parsing throw "DataError"
@@ -434,7 +480,8 @@ var testErrorArray = [
 var formats = [
 //    {testName:"jwk public", callFunction:{name:AsJWKPublic, params:["SetAlg"]}, set:{keyType:"public", keyUsages:[], format:"jwk"}},
 //    {testName:"jwk private", callFunction:{name:AsJWKPrivate, params:["SetAlg"]}, set:{keyType:"private", keyUsages:["deriveKey"], format:"jwk"}},
-    {testName:"spki", callFunction:{name:AsASN1Public, params:["SetAlg"]}, set:{keyType:"public", keyUsages:[], format:"spki"}}
+    //    {testName:"spki", callFunction:{name:AsASN1Public, params:["SetAlg"]}, set:{keyType:"public", keyUsages:[], format:"spki"}},
+    {testName:"pkcs8", callFunction:{name:AsASN1Private, params:["SetAlg"]}, set:{keyType:"private", keyUsages:[], format:"pkcs8"}}
 ];
 
 function run_test()

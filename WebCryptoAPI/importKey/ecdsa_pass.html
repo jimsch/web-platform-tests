@@ -1,13 +1,17 @@
 <!DOCTYPE HTML>
 <meta charset=utf-8>
-<title>WebCryptoAPI: ECDSA import coverage</title>
+<title>WebCryptoAPI: ECDSA importKey pass testcases</title>
 <link rel="author" title="Jim Schaad" href="mailto:ietf@augustcellars.com">
-<link rel="help" href="https://dvcs.w3.org/hg/webcrypto-api/raw-file/tip/spec/Overview.html#rsassa-pss-operations">
+<link rel="help" href="https://dvcs.w3.org/hg/webcrypto-api/raw-file/tip/spec/Overview.html#ecdsa-operations">
+
 <script src="/resources/testharness.js"></script>
 <script src="/resources/testharnessreport.js"></script>
-<script src="base64.js"></script>
-<script src="asn1_lite.js"></script>
-<script src="ecdsa_import_cover.js"></script>
+
+<script src="../util/base64.js"></script>
+<script src="../util/asn1_lite.js"></script>
+
+<script src="ecdsa_pass.js"></script>
+
 <div id="log"></div>
 <script>
 run_test();
