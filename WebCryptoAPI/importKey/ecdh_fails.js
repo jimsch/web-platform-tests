@@ -273,13 +273,22 @@ function build_asn_private(keyMap, asnAlg)
     //   
 
     var inner = [];
-    inner.push(asn1_encode_integer([new Uint8Array([1])]));
+    if ('InnerVersion' in keyMap) {
+        inner.push(asn1_encode_integer([new Uint8Array([keyMap.InnerVersion])]));
+    }
+    else {
+        inner.push(asn1_encode_integer([new Uint8Array([1])]));
+    }
     inner.push(asn1_encode_OctetString([keyMap.d]));
-    inner.push(asnAlg["params"]);
-    inner.push(asn1_encode_bitstring( build_point(keyMap)));
+    if (!('OmitParams' in keyMap)) {
+        inner.push(asnAlg["params"]);
+    }
+    if (!('OmitPoint' in keyMap)) {
+        inner.push(asn1_encode_bitstring( [build_point(keyMap)]));
+    }
 
-    var x = asn1_encode_OctetString(x);
-
+    var x = asn1_encode_OctetString(inner);
+    
     var topLevel = [];
 
     if ('OuterVersion' in keyMap) {
@@ -289,7 +298,7 @@ function build_asn_private(keyMap, asnAlg)
         topLevel.push(asn1_encode_integer([new Uint8Array([0])]));
     }
 
-    topLevel.push(asn1_encode_Alorithm(asnAlg));
+    topLevel.push(asn1_encode_Algorithm(asnAlg));
     topLevel.push(x);
 
     if (keyMap.OuterBer) {
@@ -307,7 +316,7 @@ function build_asn_private(keyMap, asnAlg)
 function AsASN1Private(call_data, test_params)
 {
     call_data.keyData = build_asn_private(call_data.raw_key.key, call_data.raw_key.oid, false);
-    if (test_params === null) return;
+    
     if (test_params === null) return;
     for (var i=0; i<test_params.length; i++) {
         switch(test_params[i]) {
@@ -316,11 +325,11 @@ function AsASN1Private(call_data, test_params)
             break;
 
         case "Extend":
-            call_data.keyData = extend(call_data.keyData);
+            call_data.keyData = extendBinary(call_data.keyData);
             break;
             
         case "Shorten":
-            call_data.keyData = shorten(call_data.keyData);
+            call_data.keyData = shortenBinary(call_data.keyData);
             break;
             
         case "BER":
@@ -329,6 +338,37 @@ function AsASN1Private(call_data, test_params)
 
         case "USE_OID":
             break;
+
+        case "OuterBER":
+            call_data.keyData["OuterBER"] = true;
+            call_data.keyData = build_asn_private(call_data.raw_key.key, call_data.raw_key.oid, true);
+            break;
+
+        case "InnerBER":
+            call_data.keyData["InnerBER"] = true;
+            call_data.keyData = build_asn_private(call_data.raw_key.key, call_data.raw_key.oid, true);
+            break;
+
+        case "OuterVersion":
+            call_data.keyData["OuterVeresion"] = 1;
+            call_data.keyData = build_asn_private(call_data.raw_key.key, call_data.raw_key.oid, true);
+            break;
+
+        case "InnerVersion":
+            call_data.keyData["InnerVeresion"] = 0;
+            call_data.keyData = build_asn_private(call_data.raw_key.key, call_data.raw_key.oid, true);
+            break;
+
+        case "OmitParams":
+            call_data.keyData["OmitParams"] = true;
+            call_data.keyData = build_asn_private(call_data.raw_key.key, call_data.raw_key.oid, true);
+            break;
+
+        case "OmitPoint":
+            call_data.keyData["OmitPoint"] = true;
+            call_data.keyData = build_asn_private(call_data.raw_key.key, call_data.raw_key.oid, true);
+            break;
+            
         }
     }
     return;
@@ -417,6 +457,12 @@ var testErrorArray = [
     {step:"2.1", name:"Invalid Usages", conditions:{eq:{format:"pkcs8"}}, set:{usages:["deriveKey", "depriveKey"]}, error:"SyntaxError"},
 
     //  Step 2.3 - error in parsing  "DataError"
+    {step:"2.3", name:"Invalid ASN.1", conditions:{eq:{format:"pkcs8"}}, callFunction:{name:AsASN1Private, params:["Extend"]}, error:"DataError"},
+    {step:"2.3", name:"Invalid ASN.1", conditions:{eq:{format:"pkcs8"}}, callFunction:{name:AsASN1Private, params:["Shorten"]}, error:"DataError"},
+    {step:"2.3", name:"Invalid ASN.1", conditions:{eq:{format:"pkcs8"}}, callFunction:{name:AsASN1Private, params:["OuterBER"]}, error:"DataError"},
+    {step:"2.3", name:"Invalid ASN.1", conditions:{eq:{format:"pkcs8"}}, callFunction:{name:AsASN1Private, params:["InnerBER"]}, error:"DataError"},
+    {step:"2.3", name:"Invalid ASN.1", conditions:{eq:{format:"pkcs8"}}, callFunction:{name:AsASN1Private, params:["InnerVersion"]}, error:"DataError"},
+    {step:"2.3", name:"Invalid ASN.1", conditions:{eq:{format:"pkcs8"}}, callFunction:{name:AsASN1Private, params:["OuterVersion"]}, error:"DataError"},
   
     //  Step 2.4 - wrong oid
     {step:"2.4", name:"Wrong privateKeyAlgorithm", conditions:{eq:{format:"pkcs8"}}, callFunction:{name:AsASN1Private, params:["wrong privateKeyAlg"]}, error:"DataError"},
@@ -478,11 +524,17 @@ var testErrorArray = [
 ];
 
 var formats = [
-//    {testName:"jwk public", callFunction:{name:AsJWKPublic, params:["SetAlg"]}, set:{keyType:"public", keyUsages:[], format:"jwk"}},
-//    {testName:"jwk private", callFunction:{name:AsJWKPrivate, params:["SetAlg"]}, set:{keyType:"private", keyUsages:["deriveKey"], format:"jwk"}},
-    //    {testName:"spki", callFunction:{name:AsASN1Public, params:["SetAlg"]}, set:{keyType:"public", keyUsages:[], format:"spki"}},
+    {testName:"jwk public", callFunction:{name:AsJWKPublic, params:["SetAlg"]}, set:{keyType:"public", keyUsages:[], format:"jwk"}},
+    {testName:"jwk private", callFunction:{name:AsJWKPrivate, params:["SetAlg"]}, set:{keyType:"private", keyUsages:["deriveKey"], format:"jwk"}},
+    {testName:"spki", callFunction:{name:AsASN1Public, params:["SetAlg"]}, set:{keyType:"public", keyUsages:[], format:"spki"}},
     {testName:"pkcs8", callFunction:{name:AsASN1Private, params:["SetAlg"]}, set:{keyType:"private", keyUsages:[], format:"pkcs8"}}
 ];
+
+var extractable = [
+    {testName: "extract", set:{"extractable":true}},
+    {testName: "non-extract", set:{"extractable":false}}
+];
+
 
 function run_test()
 {
@@ -493,7 +545,7 @@ function run_test()
 
         formats.forEach(function(format) {
             var call_data = applyTest(key_data, format);
-            call_data.testName = call_data.testName + " " + formats.testName;
+            call_data.testName = call_data.testName + " " + format.testName;
             
             for (var iError=0; iError<testErrorArray.length; iError++) {
                 if (! checkTest(call_data, testErrorArray[iError])) continue;
@@ -507,4 +559,28 @@ function run_test()
                        )
     }
                 )
+}
+
+
+
+
+function run_test_pass()
+{
+    var t;
+
+    Keys.forEach(function(key) {
+        var key_data = {raw_key:key, testName:key.keyName, extractable:true };
+
+        formats.forEach(function(format) {
+            var call_data = applyTest(key_data, format);
+            call_data.testName = call_data.testName + " " + format.testName;
+
+            extractable.forEach(function(extractable) {
+                var call_data = applyTest(key_data, format);
+                call_data.testName = call_data.testName + " " + format.testName;
+            }
+
+                
+        
+    }
 }
