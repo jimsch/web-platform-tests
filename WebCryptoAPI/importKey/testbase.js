@@ -78,11 +78,6 @@ function applyTest(call_data, test_data)
 
     new_data["step"] = test_data["step"];
 
-    if (test_data["callFunction"] != null) {
-        var params = test_data["callFunction"]["params"];
-        if (params == undefined || params == null) params = [];
-        test_data["callFunction"]["name"](new_data, params);
-    }
     
     if (test_data["delete"] != null) {
         var x = test_data["delete"];
@@ -98,5 +93,11 @@ function applyTest(call_data, test_data)
         }
     }
     
+    if (test_data["callFunction"] != null) {
+        var params = test_data["callFunction"]["params"];
+        if (params == undefined || params == null) params = [];
+        test_data["callFunction"]["name"](new_data, params);
+    }
+
     return new_data;
 }
